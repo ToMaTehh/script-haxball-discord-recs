@@ -15,7 +15,7 @@ var MaximaCantidadDeJugadores = 		10; 											// Cantidad de jugadores máx.
 var ServidorToken =             		"thr1.AAAAAGokm2-DSVa9DWc0lg.YYSZ4fRjkhQ"; 		// Token del servidor.
 var NoQuieroUnRobot =           		true; 											
 var SalaPublica =               		true; 											// true = pública, false = privada
-var ContraseñaDeLaSala = 				"Contraseña123";								// Si SalaPublica = false, la contraseña es ContraseñaDeLaSala
+var ContraseñaDeLaSala = 				"123";								 			// Si SalaPublica = false, la contraseña es ContraseñaDeLaSala
 
 var LocalizacionDelServidor =   		"AR"; 											// AR = Argentina
 var Latitud	=							-38.872;									
@@ -25,6 +25,7 @@ var NombreDelBot =              		"Gato de Monitoreo"; 							// Si NoQuieroUnRo
 
 // - VARIABLES GLOBALES
 var NombreDeLasRec =                    "Prueba_De_Base_De_Datos"; 						// Nombre a asignar a los archivos .hbr2 + Date.now
+let segundosTranscurridosHaxball = 		0;
 const DISCORD_WEBHOOK_URL = 			""; 											// Simplemente usa el URL que te devuelva tu canal de Discord.
 
 var NombreDelMapaActual = 				"Classic (Predeterminado)"; 					// Var para evitar errores, pero ustedes en la función
@@ -82,7 +83,7 @@ let partidoActual = {
     jugadores: {} 
 };
 
-// SISTEMA DE RASTREO DE BALÓN (Para Goles y Asistencias)
+// - SISTEMA DE RASTREO DE BALÓN (Para Goles y Asistencias)
 // Guardaremos los objetos de los últimos jugadores que patearon/tocaron el balón
 let ultimoToque = null;
 let penultimoToque = null;
@@ -91,8 +92,9 @@ let penultimoToque = null;
 room.onPlayerTeamChange = function(changedPlayer, byPlayer) {
     if (changedPlayer.team === 0) return; 
 
-    if (!partidoActual.jugadores[changedPlayer.auth]) {
-        partidoActual.jugadores[changedPlayer.auth] = {
+	// Datos para los jugadores
+    if (!partidoActual.jugadores[changedPlayer.id]) {
+        partidoActual.jugadores[changedPlayer.id] = {
             id: changedPlayer.id,
             name: changedPlayer.name,
             team: changedPlayer.team,
@@ -103,7 +105,7 @@ room.onPlayerTeamChange = function(changedPlayer, byPlayer) {
             toques: 0 
         };
     } else {
-        partidoActual.jugadores[changedPlayer.auth].team = changedPlayer.team;
+        partidoActual.jugadores[changedPlayer.id].team = changedPlayer.team;
     }
 };
 
@@ -111,7 +113,7 @@ room.onPlayerLeave = function(player) {
     // Mantenemos los datos por si sale en medio del partido, para el reporte final.
 };
 
-// 🎮 EVENTOS DE JUEGO
+// - EVENTOS DE JUEGO
 
 room.onGameStart = function(byPlayer) {
     room.startRecording();
@@ -120,28 +122,21 @@ room.onGameStart = function(byPlayer) {
 	
 	partidoActual.activo = true;
     partidoActual.duracion = "0:00";
-    partidoActual.tiempoInicio = null;
-    partidoActual.tiempoFinal = null;
-	partidoActual.relojSistemaInicio = Date.now();
-	
-    const scoresInicio = room.getScores();
-    if (scoresInicio) {
-        partidoActual.tiempoInicio = Math.floor(scoresInicio.time);
-        console.log("⏱️ Tiempo inicial capturado:", partidoActual.tiempoInicio);
-    }
+	segundosTranscurridosHaxball = 0; // Reseteamos el contador de tiempo real
 
     partidoActual.golesRed = 0;
     partidoActual.golesBlue = 0;
     partidoActual.historialGoles = [];
-    partidoActual.mapa = NombreDelMapaActual;
+    partidoActual.mapa = NombreDelMapaActual; // Provisional, leer más arriba.
+	partidoActual.jugadores = {};
     
     // Resetear el rastreador de toques al sacar del medio
     ultimoToque = null;
     penultimoToque = null;
     
     room.getPlayerList().forEach(player => {
-        if (player.team !== 0) {
-            partidoActual.jugadores[player.auth] = {
+        if (player.team === 1 || player.team === 2) {
+            partidoActual.jugadores[player.id] = {
                 id: player.id,
                 name: player.name,
                 team: player.team,
@@ -157,33 +152,16 @@ room.onGameStart = function(byPlayer) {
 
 // Captura cada vez que un jugador patea o toca la pelota
 room.onPlayerBallKick = function(player) {
-    if (partidoActual.jugadores[player.auth]) {
-        partidoActual.jugadores[player.auth].toques++;
+    if (partidoActual.jugadores[player.id]) {
+        partidoActual.jugadores[player.id].toques++;
     }
 	
-	const scoresSincro = room.getScores();
-    if (scoresSincro) {
-        const tiempoSegundos = Math.floor(scoresSincro.time);
-        const mins = Math.floor(tiempoSegundos / 60);
-        const secs = tiempoSegundos % 60;
-        // Se va actualizando en la base de datos temporal constantemente
-        partidoActual.duracion = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-    }
-	
-    if (partidoActual.tiempoInicio === null) {
-        const scores = room.getScores();
-        if (scores) {
-            partidoActual.tiempoInicio = Math.floor(scores.time);
-            console.log("⏱️ Tiempo inicial capturado en primer toque:", partidoActual.tiempoInicio);
-    }}
-
     // Lógica de rotación de toques: el que era último pasa a ser penúltimo, y el nuevo pasa a ser el último.
     if (ultimoToque === null || ultimoToque.id !== player.id) {
         penultimoToque = ultimoToque;
         ultimoToque = player;
     }
 };
-
 
 room.onTeamGoal = function(team) {
     const scores = room.getScores();
@@ -205,23 +183,23 @@ room.onTeamGoal = function(team) {
                 mensajeGol = `${tiempoFormateado} ⚽ Gol de ${ultimoToque.name}`;
                 
                 // Sumamos el gol a sus estadísticas en memoria
-                if (partidoActual.jugadores[ultimoToque.auth]) {
-                    partidoActual.jugadores[ultimoToque.auth].goles++;
+                if (partidoActual.jugadores[ultimoToque.id]) {
+                    partidoActual.jugadores[ultimoToque.id].goles++;
                 }
 
                 // Verificamos si hubo asistencia (El penúltimo toque fue del mismo equipo y no es el mismo jugador)
                 if (penultimoToque !== null && penultimoToque.team === team && penultimoToque.id !== ultimoToque.id) {
                     mensajeGol += ` | 👟 Asistencia de ${penultimoToque.name}`;
-                    if (partidoActual.jugadores[penultimoToque.auth]) {
-                        partidoActual.jugadores[penultimoToque.auth].asistencias++;
+                    if (partidoActual.jugadores[penultimoToque.id]) {
+                        partidoActual.jugadores[penultimoToque.id].asistencias++;
                     }
                 }
             } 
             // AUTOGOL / GOL EN CONTRA (El jugador la metió en su propio arco)
             else {
                 mensajeGol = `${tiempoFormateado} 🤡 Autogol de ${ultimoToque.name}`;
-                if (partidoActual.jugadores[ultimoToque.auth]) {
-                    partidoActual.jugadores[ultimoToque.auth].golesEnContra++;
+                if (partidoActual.jugadores[ultimoToque.id]) {
+                    partidoActual.jugadores[ultimoToque.id].golesEnContra++;
                 }
             }
         } else {
@@ -247,33 +225,14 @@ room.onPositionsReset = function() {
 room.onGameStop = async function(byPlayer) {
     if (!partidoActual.activo) return;
 	 
-    let tiempoTotalSegundos = 0;
-    const scoresFinal = room.getScores();
-
-    // Intentar usar el tiempo oficial de Haxball
-    if (scoresFinal) {
-        partidoActual.tiempoFinal = Math.floor(scoresFinal.time);
-        console.log("⏱️ Tiempo final capturado:", partidoActual.tiempoFinal);
-        
-        if (partidoActual.tiempoInicio !== null) {
-            tiempoTotalSegundos = partidoActual.tiempoFinal - partidoActual.tiempoInicio;
-        }
-    } 
-    // Si Haxball ya destruyó los scores, usamos el reloj del sistema
-    else if (partidoActual.relojSistemaInicio !== null) {
-        console.warn("⚠️ Aviso: room.getScores() fue null. Calculando duración con el reloj del sistema...");
-        tiempoTotalSegundos = Math.floor((Date.now() - partidoActual.relojSistemaInicio) / 1000);
-    }
-
-    // Formateamos los segundos totales a MM:SS de forma segura
-    if (tiempoTotalSegundos > 0) {
-        const mins = Math.floor(tiempoTotalSegundos / 60);
-        const secs = Math.floor(tiempoTotalSegundos % 60);
+    // Usamos el tiempo exacto acumulado por el onGameTick hasta el último segundo vivo
+    if (segundosTranscurridosHaxball > 0) {
+        const mins = Math.floor(segundosTranscurridosHaxball / 60);
+        const secs = Math.floor(segundosTranscurridosHaxball % 60);
         partidoActual.duracion = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-        console.log(`⏱️ DURACIÓN FINAL CALCULADA: ${partidoActual.duracion} (Total: ${tiempoTotalSegundos}s)`);
+        console.log(`⏱️ DURACIÓN FINAL: ${partidoActual.duracion} (${segundosTranscurridosHaxball}s)`);
     } else {
         partidoActual.duracion = "0:00";
-        console.warn("⚠️ No se pudo calcular el tiempo de juego.");
     }
 
     const recBytes = room.stopRecording();
@@ -286,33 +245,49 @@ room.onGameStop = async function(byPlayer) {
     room.sendAnnouncement("⚽ ¡Se ha enviado la grabación al discord!", null, AMARILLO, "bold");
 };
 
-
 // ENVÍO A DISCORD Y GENERACIÓN DEL EMBED
 async function enviarEstadisticasADiscord(archivoBytes, datos) {
     let listaRed = "";
     let listaBlue = "";
 
-    for (const auth in datos.jugadores) {
-        const p = datos.jugadores[auth];
+    // Recorremos las fichas guardadas para listar los nombres y estadísticas por equipo 🛡️
+    for (const id in datos.jugadores) {
+        const p = datos.jugadores[id];
         
-        // Formateamos la string agregando de forma condicional si tiene Goles en Contra (Autogoles)
-        let detalles = `⚽ ${p.goles} | 👟 ${p.asistencias}`;
-        if (p.golesEnContra > 0) detalles += ` | 🤡 O.G: ${p.golesEnContra}`;
-        detalles += ` | 👣 Toques: ${p.toques}`;
-
-        const lineaStats = `• **${p.name}**:\n  └─ ${detalles}\n`;
+        // Creamos la línea con el nombre del jugador y sus estadísticas individuales
+        const lineaJugador = `• **${p.name}**:\n  └ ⚽ ${p.goles} | 👟 ${p.asistencias} | 🤡 O.G: ${p.golesEnContra} | 👣 Toques: ${p.toques}\n`;
         
         if (p.team === 1) {
-            listaRed += lineaStats;
+            listaRed += lineaJugador;
         } else if (p.team === 2) {
-            listaBlue += lineaStats;
+            listaBlue += lineaJugador;
         }
     }
 
+    // Si algún equipo quedó completamente vacío, ponemos un aviso válido para Discord
+    if (listaRed.trim() === "") listaRed = "*Ningún jugador en este equipo.*";
+    if (listaBlue.trim() === "") listaBlue = "*Ningún jugador en este equipo.*";
+	
+	const frasesDeTitulo = [
+        "⚽ PARTIDAZO TERMINADO",
+        "🏁 ¡PITAZO FINAL!",
+        "🔥 EL PARTIDO HA CONCLUIDO",
+        "🚨 TENEMOS RESULTADO FINAL",
+        "👑 FIN DEL ENCUENTRO",
+        "💥 ¡QUÉ MANERA DE JUGAR! TERMINÓ",
+        "📋 REPORTE DE SQUASH / HAXBALL"
+    ];
+
+    // Elegimos una posición al azar de la lista
+    const tituloAleatorio = frasesDeTitulo[Math.floor(Math.random() * frasesDeTitulo.length)];
+	
+	// Rango válido seguro para evitar desbordamientos en Discord (Máx 16777215)
+	const colorAleatorio = Math.floor(Math.random() * 16777216);
+
     const embedDiscord = {
-        title: "⚽ PARTIDAZO TERMINADO",
+        title: tituloAleatorio,
         description: `**RESULTADO FINAL:**\n🔴 RED **${datos.golesRed}** vs **${datos.golesBlue}** BLUE 🔵`,
-        color: 3066993, 
+        color: colorAleatorio, 
         fields: [
             {
                 name: "🗺️ DATOS DEL PARTIDO",
@@ -320,13 +295,13 @@ async function enviarEstadisticasADiscord(archivoBytes, datos) {
                 inline: false
             },
             {
-                name: "🔴 DESEMPEÑO RED",
-                value: listaRed || "No hubo jugadores en este equipo.",
+                name: "🔴 JUGADORES RED",
+                value: listaRed,
                 inline: true
             },
             {
-                name: "🔵 DESEMPEÑO BLUE",
-                value: listaBlue || "No hubo jugadores en este equipo.",
+                name: "🔵 JUGADORES BLUE",
+                value: listaBlue,
                 inline: true
             },
             {
@@ -336,7 +311,7 @@ async function enviarEstadisticasADiscord(archivoBytes, datos) {
             }
         ],
         footer: { text: "Repositorio Open Source - ToMaTehhh" },
-        timestamp: new Date()
+        timestamp: new Date().toISOString() // Formato de fecha ISO estricto para evitar bugs de región
     };
 
     const formData = new FormData();
@@ -347,12 +322,29 @@ async function enviarEstadisticasADiscord(archivoBytes, datos) {
     formData.append("file", blobRec, nombreArchivo);
 
     try {
-        await fetch(DISCORD_WEBHOOK_URL, { method: "POST", body: formData });
-        console.log("✅ Reporte y archivo REC enviados a Discord con éxito.");
+        const response = await fetch(DISCORD_WEBHOOK_URL, { method: "POST", body: formData });
+        if (response.ok) {
+            console.log("✅ Reporte y archivo REC enviados a Discord con éxito.");
+        } else {
+            const errorTexto = await response.text();
+            console.error("❌ Discord rechazó el paquete. Código:", response.status, errorTexto);
+        }
     } catch (error) {
         console.error("❌ Error de red al intentar enviar a Discord:", error);
     }
 }
+
+
+
+room.onGameTick = function() {
+    if (!partidoActual.activo) return;
+
+    // Cada vez que la API nos deje leer los scores, actualizamos nuestro contador propio
+    const scoresSincro = room.getScores();
+    if (scoresSincro) {
+        segundosTranscurridosHaxball = Math.floor(scoresSincro.time);
+    }
+};
 
 room.onPlayerJoin = async function(player) {
     MensajeAlIniciar(player);
