@@ -14,6 +14,9 @@
 
 *- Si ejecutan el código para probar, que sepan que sólamente hay dos comandos, uno que puse para complementar el inicio (!help) y el comando para darse administrador (!admin).*
 
+## IMAGEN DEMOSTRATIVA DEL EMBED
+<img src="https://cdn.discordapp.com/attachments/783191826022531083/1515471058185097286/image.png?ex=6a2f1fe8&is=6a2dce68&hm=363b6d8a522ee2f5c1b4c55e90193bdfc811bdf8eab673d684004c3d3b688260" alt="Imagen a modo de ejemplo del mensaje que se envía al canal de la respectia WebHook" width="569">
+
 ## REQUERIMOS
 ```yaml
 Configurar: las diferentes variables (a modo de base de datos) que flotan para poder ser rellenadas con los datos del partido, goles, etcétera.
