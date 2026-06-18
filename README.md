@@ -1,4 +1,5 @@
 # 🎥 — HAXBALL DISCORD BOT RECs
+![haxballDiscordBotRecs Banner](https://media.discordapp.net/attachments/1511168458979803187/1517112087674097764/recs.jpg?ex=6a35183c&is=6a33c6bc&hm=e6a33d64a402238db028894f3657a97324834046b1c3e3ece3913fab5fd21daa&=&format=webp&width=1000&height=500)
 ### Sistema de estadísticas y grabación automatizada
 *Bueno, paso a explicar desde cero. ¿El por qué del repositorio? Verán: hace poco rondaba en una comunidad de Haxball, donde encontre que su sistema de RECs mediante el Bot (script) volcaba todas las estadísticas de la base de datos. Es algo simple de hacer pero me gustó el diseño y quería compartirlo para que todos puedan usarlo. Apropiensen de él y compartanlo.*
 
